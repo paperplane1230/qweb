@@ -34,3 +34,9 @@
 # Specification
 *.pdf
 starter_code/
+
+# Vim swapping file
+.*.swp
+
+# build directory
+build-debug/
