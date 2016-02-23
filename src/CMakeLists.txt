@@ -7,11 +7,14 @@ set(CMAKE_C_FLAGS_RELEASE "-fdiagnostics-color=always -std=gnu11 -g -O2 -Wall -W
 # aux_source_directory(. DIR_SRCS)
 # add_subdirectory()
 
-set(HEADERS socket.h error.h)
-add_executable(qweb main.c socket.c ${HEADERS})
+add_executable(qweb main.c socket.c request.c response.c rio.c ${HEADERS})
+target_include_directories(qweb PRIVATE ../http-parser)
+set(HEADERS socket.h error.h request.h response.h rio.h http_parser.h)
 SET(EXECUTABLE_OUTPUT_PATH ${PROJECT_BINARY_DIR}/bin)
 
-# target_link_libraries(  )
+target_link_libraries(qweb http_parser)
+cmake_policy(SET CMP0015 OLD)
+link_directories(../http-parser)
 # add_library ( ${DIR_LIB_SRCS})
 
 # enable_testing()

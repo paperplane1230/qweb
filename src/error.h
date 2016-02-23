@@ -13,6 +13,11 @@
 #include <stdlib.h>
 #include <netdb.h>
 
+typedef enum {
+    SYSCALL_ERR = -1,
+    ARGS_NUM_ERR = -2,
+} error_e;
+
 /**
  * @brief Getaddrinfo-style error.
  *
@@ -22,7 +27,7 @@
 static inline void gai_error(int errcode, const char *msg) /* Getaddrinfo-style error */
 {
     fprintf(stderr, "%s: %s\n", msg, gai_strerror(errcode));
-    exit(2);
+    exit(SYSCALL_ERR);
 }
 
 /**
@@ -33,6 +38,6 @@ static inline void gai_error(int errcode, const char *msg) /* Getaddrinfo-style 
 static inline void unix_error(const char *msg)
 {
     fprintf(stderr, "%s: %s\n", msg, strerror(errno));
-    exit(2);
+    exit(SYSCALL_ERR);
 }
 

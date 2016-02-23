@@ -14,7 +14,8 @@
 // simplifies calls to bind(), connect(), and accept()
 typedef struct sockaddr SA;
 
-static const size_t MAXLINE = 8192;
+#define MAXLINE 8192
+
 static const int LISTENQ = 1024;
 
 /**

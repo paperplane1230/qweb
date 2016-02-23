@@ -40,3 +40,6 @@ starter_code/
 
 # build directory
 build-debug/
+
+# youcompleteme
+.ycm_extra_conf.pyc
