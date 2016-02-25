@@ -9,8 +9,28 @@
 #include "rio.h"
 #include "response.h"
 #include <assert.h>
+#include <sys/stat.h>
+#include <time.h>
 
 static request_t *request = NULL;
+
+#define TYPE_NUM 20
+
+static const char *postfix[TYPE_NUM][3] = {
+    {".html", ".htm",},
+    {".txt"},
+};
+
+static void init_req(void)
+{
+    request = (request_t *) calloc(1, sizeof(request_t));
+}
+
+static void free_req(void)
+{
+    free(request);
+    request = NULL;
+}
 
 static size_t strlncat(char *dst, size_t len, const char *src, size_t n)
 {
@@ -27,33 +47,25 @@ static size_t strlncat(char *dst, size_t len, const char *src, size_t n)
     return slen + dlen;
 }
 
-static void print_request(void)
-{
-    printf("%u %s HTTP/%u.%u\n", request->method, request->request_url,
-            request->http_major, request->http_minor);
-    for (size_t j = 0; j < request->num_headers; ++j) {
-        printf("%s: %s\n", request->headers[j][0], request->headers[j][1]);
-    }
-    printf("%s\n", request->body);
+/* static void print_request(void) */
+/* { */
+/*     printf("%u %s HTTP/%u.%u\n", request->method, request->request_url, */
+/*             request->http_major, request->http_minor); */
+/*     for (size_t j = 0; j < request->num_headers; ++j) { */
+/*         printf("%s: %s\n", request->headers[j][0], request->headers[j][1]); */
+/*     } */
+/*     printf("%s\n", request->body); */
 
-    printf("keep-alive: %u\n", request->should_keep_alive);
-    printf("body-size: %ld\n", request->body_size);
-    for (size_t j = 0; j < request->num_chunks; ++j) {
-        printf("chunk %zd size: %zd\n", j, request->chunk_lengths[j]);
-    }
-    printf("path: %s\n", request->request_path);
-    printf("query: %s\n", request->query_string);
-    printf("fragment: %s\n", request->fragment);
-    fputs("\n", stdout);
-}
-
-static int message_begin_cb(http_parser *p)
-{
-    assert(p!=NULL);
-    // IMPORTANT: calloc set the memory area to be 0
-    request = (request_t *) calloc(1, sizeof(request_t));
-    return 0;
-}
+/*     printf("keep-alive: %u\n", request->should_keep_alive); */
+/*     printf("body-size: %ld\n", request->body_size); */
+/*     for (size_t j = 0; j < request->num_chunks; ++j) { */
+/*         printf("chunk %zd size: %zd\n", j, request->chunk_lengths[j]); */
+/*     } */
+/*     printf("path: %s\n", request->request_path); */
+/*     printf("query: %s\n", request->query_string); */
+/*     printf("fragment: %s\n", request->fragment); */
+/*     fputs("\n", stdout); */
+/* } */
 
 static int headers_complete_cb(http_parser *p)
 {
@@ -61,15 +73,6 @@ static int headers_complete_cb(http_parser *p)
     request->http_major = p->http_major;
     request->http_minor = p->http_minor;
     request->should_keep_alive = http_should_keep_alive(p);
-    return 0;
-}
-
-static int message_complete_cb(http_parser *p)
-{
-    assert(p!=NULL);
-    print_request();
-    free(request);
-    request = NULL;
     return 0;
 }
 
@@ -141,7 +144,7 @@ static size_t read_reqeust(rio_t *rp, char *buf)
     ssize_t nread = readline(rp, buf, MAXLINE);
     size_t read_sum = nread;
 
-    while (strncmp(buf, "\r\n", 2) != 0) {
+    while (strncmp(buf, "\r\n", 2) != 0 && nread != 0) {
         buf += nread;
         nread = readline(rp, buf, MAXLINE);
         read_sum += nread;
@@ -149,7 +152,7 @@ static size_t read_reqeust(rio_t *rp, char *buf)
     return read_sum;
 }
 
-void handle_request(int fd)
+static int parse_request(int fd)
 {
     const size_t buflen = 5 * MAXLINE;
     char buf[buflen];
@@ -166,21 +169,100 @@ void handle_request(int fd)
 
     http_parser_init(&parser, HTTP_REQUEST);
     http_parser_settings settings = {
-        .on_message_begin = message_begin_cb,
         .on_url = request_url_cb,
         .on_header_field = header_field_cb,
         .on_header_value = header_value_cb,
         .on_headers_complete = headers_complete_cb,
         .on_body = body_cb,
         .on_chunk_header = chunk_header_cb,
-        .on_message_complete = message_complete_cb,
     };
-    size_t parsed = http_parser_execute(&parser, &settings, buf, nread);
-    char body[MAXLINE] = {'\0'};
-    const status_t *status = parsed == nread
-                        ? &STATUS_NOT_IMPLEMENTED : &STATUS_BAD_REQUEST;
+    if (nread == 0) {
+        return -1;
+    }
+    return nread == http_parser_execute(&parser, &settings, buf, nread);
+}
 
-    snprintf(body, ERR_BODY_LEN, err_body, status->code, status->msg);
-    send_response(fd, status, "Connection: close\r\n", body, strnlen(body, MAXLINE));
+static content_type_e get_type(const char *filename)
+{
+    for (size_t i = 0; i < TYPE_NUM; ++i) {
+        for (size_t j = 0; postfix[i][j] != NULL; ++j) {
+            if (strstr(filename,postfix[i][j]) != NULL) {
+                return i;
+            }
+        }
+    }
+    return UNKNOWN;
+}
+
+static void get_or_head(int fd, bool is_get)
+{
+    char filename[MAX_ELEMENT_SIZE] = ".";
+    struct stat sbuf;
+    const char *url = request->request_path;
+    const size_t url_len = strnlen(url, MAX_ELEMENT_SIZE);
+
+    strncat(filename, url, url_len);
+    if (url[url_len-1] == '/') {
+        strncat(filename, "home.html", 9);
+    }
+    if (stat(filename, &sbuf) < 0) {
+        send_error(fd, &STATUS_NOT_FOUND, "Connection: keep-alive\r\n");
+        return;
+    } else if (strstr(filename,"/../") ||
+            !S_ISREG(sbuf.st_mode) || !(S_IRUSR & sbuf.st_mode)) {
+        send_error(fd, &STATUS_FORBIDDEN, "Connection: keep-alive\r\n");
+        return;
+    }
+    content_type_e type = get_type(filename);
+    time_t t = sbuf.st_mtim.tv_sec;
+    const size_t TIME_BUF_SIZE = 32;
+    char time_buf[TIME_BUF_SIZE];
+
+    format_time(time_buf, TIME_BUF_SIZE, &t);
+    char buf[256] = {'\0'};
+    const char *header_details =
+            "Last-Modified: %s\r\n"
+            "Connection: keep-alive\r\n"
+            "Accept-Range: bytes\r\n";
+
+    snprintf(buf, 256, header_details, time_buf);
+    if (is_get) {
+        send_response(fd, &STATUS_OK, buf, type, true, filename, sbuf.st_size);
+    } else {
+        send_response(fd, &STATUS_OK, buf, type, false, NULL, sbuf.st_size);
+    }
+}
+
+static void handle_headers(int fd)
+{
+    switch (request->method) {
+    case HTTP_HEAD:
+        get_or_head(fd, false);
+        break;
+    case HTTP_GET:
+        get_or_head(fd, true);
+        break;
+    case HTTP_POST:
+        break;
+    default:
+        send_error(fd, &STATUS_NOT_IMPLEMENTED, "Connection: keep-alive\r\n");
+        break;
+    }
+/* #ifdef debug */
+/*     print_request(); */
+/* #endif */
+}
+
+void handle_request(int fd)
+{
+    init_req();
+    int res = parse_request(fd);
+
+    if (res == 0) {
+        send_error(fd, &STATUS_BAD_REQUEST, "Connection: close\r\n");
+    } else if (res > 0){
+        handle_headers(fd);
+    }
+    free_req();
 }
 

@@ -6,6 +6,7 @@
  * @date 2016-02-08
  */
 #include "rio.h"
+#include "response.h"
 
 size_t readn(int fd, void *userbuf, size_t n)
 {
@@ -18,6 +19,7 @@ size_t readn(int fd, void *userbuf, size_t n)
             if (errno == EINTR) {
                 nread = 0;
             } else {
+                send_error(fd, &STATUS_INTERNAL_SERVER_ERROR, "Connection: close\r\n");
                 unix_error("readn error");
             }
         } else if (nread == 0) {
@@ -40,7 +42,10 @@ ssize_t writen(int fd, const void *usrbuf, size_t n)
         if ((nwritten = write(fd, bufp, nleft)) <= 0) {
             if (errno == EINTR) {
                 nwritten = 0;
+            } else if (errno == EPIPE) {
+                return -1;
             } else {
+                send_error(fd, &STATUS_INTERNAL_SERVER_ERROR, "Connection: close\r\n");
                 unix_error("writen error");
             }
         }
@@ -86,6 +91,7 @@ ssize_t readline(rio_t *rp, void *usrbuf, size_t maxlen)
             *bufp = '\0';
             return n - 1;
         } else {
+            send_error(rp->rio_fd, &STATUS_INTERNAL_SERVER_ERROR, "Connection: close\r\n");
             unix_error("readline error");
         }
     }

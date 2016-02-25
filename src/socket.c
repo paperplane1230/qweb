@@ -9,6 +9,33 @@
 #include <netdb.h>
 #include <string.h>
 
+int Accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen)
+{
+    int res = 0;
+
+    if ((res = accept(sockfd, addr, addrlen)) < 0) {
+        unix_error("Accept error");
+    }
+    return res;
+}
+
+void Getnameinfo(const struct sockaddr *sa, socklen_t salen,
+        char *host, socklen_t hostlen, char *serv, socklen_t servlen, int flags)
+{
+    int res = 0;
+
+    if ((res = getnameinfo(sa, salen, host, hostlen, serv, servlen, flags)) != 0) {
+        gai_error(res, "Getnameinfo error");
+    }
+}
+
+void Close(int fd)
+{
+    if (close(fd) < 0) {
+        unix_error("Close error");
+    }
+}
+
 int tcp_listen(const char *host, const char *serv)
 {
     struct addrinfo hints;
@@ -30,10 +57,12 @@ int tcp_listen(const char *host, const char *serv)
         if ((listenfd = socket(res->ai_family, res->ai_socktype, res->ai_protocol)) < 0) {
             continue;
         }
-        const socklen_t optval = 1;
+        const int optval = 1;
 
         // eliminate "Address already in use" error from bind
-        Setsockopt(listenfd, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval));
+        if (setsockopt(listenfd, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval)) < 0) {
+            unix_error("setsockopt error");
+        }
         if (bind(listenfd, res->ai_addr, res->ai_addrlen) == 0) {
             // success
             break;

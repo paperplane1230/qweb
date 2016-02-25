@@ -48,12 +48,6 @@ size_t readn(int fd, void *userbuf, size_t n);
  */
 ssize_t writen(int fd, const void *usrbuf, size_t n);
 
-/**
- * @brief Associate a descriptor with a read buffer and reset buffer.
- *
- * @param rp The rio_t to be initialized.
- * @param fd The file descriptor to be associated.
- */
 static inline void rio_init(rio_t *rp, int fd)
 {
     rp->rio_fd = fd;

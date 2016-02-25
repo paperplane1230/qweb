@@ -10,6 +10,7 @@
 #include "error.h"
 #include <sys/socket.h>
 #include <unistd.h>
+#include <stdbool.h>
 
 // simplifies calls to bind(), connect(), and accept()
 typedef struct sockaddr SA;
@@ -29,37 +30,11 @@ static const int LISTENQ = 1024;
 int tcp_listen(const char *host, const char *serv);
 
 /**
- * @brief Wrapper function for setsockopt.
- *
- * @param sockfd The first parameter of setsockopt.
- * @param level The second parameter of setsockopt.
- * @param optname The third parameter of setsockopt.
- * @param optval The fourth parameter of setsockopt.
- * @param optlen The fifth parameter of setsockopt.
- */
-static inline void Setsockopt(int sockfd, int level, int optname,
-        const void *optval, socklen_t optlen)
-{
-    int res = 0;
-
-    if ((res = setsockopt(sockfd, level, optname, optval, optlen)) < 0) {
-        unix_error("Setsockopt error");
-    }
-}
-
-/**
  * @brief Wrapper function for close.
  *
  * @param fd The parameter of close.
  */
-static inline void Close(int fd)
-{
-    int res = 0;
-
-    if ((res = close(fd)) < 0) {
-        unix_error("Close error");
-    }
-}
+void Close(int fd);
 
 /**
  * @brief Wrapper function for accept.
@@ -70,15 +45,7 @@ static inline void Close(int fd)
  *
  * @return Returned value of accept if succeed else exit with error.
  */
-static inline int Accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen)
-{
-    int res = 0;
-
-    if ((res = accept(sockfd, addr, addrlen)) < 0) {
-        unix_error("Accept error");
-    }
-    return res;
-}
+int Accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen);
 
 /**
  * @brief Wrapper function for getnameinfo.
@@ -91,13 +58,6 @@ static inline int Accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen)
  * @param servlen The sixth parameter of getnameinfo.
  * @param flags The seventh parameter of getnameinfo.
  */
-static inline void Getnameinfo(const struct sockaddr *sa, socklen_t salen,
-        char *host, socklen_t hostlen, char *serv, socklen_t servlen, int flags)
-{
-    int res = 0;
-
-    if ((res = getnameinfo(sa, salen, host, hostlen, serv, servlen, flags)) != 0) {
-        gai_error(res, "Getnameinfo error");
-    }
-}
+void Getnameinfo(const struct sockaddr *sa, socklen_t salen,
+        char *host, socklen_t hostlen, char *serv, socklen_t servlen, int flags);
 

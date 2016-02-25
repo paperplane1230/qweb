@@ -24,20 +24,12 @@ typedef enum {
  * @param errcode The error code passed to gai_strerror.
  * @param msg The message to be shown.
  */
-static inline void gai_error(int errcode, const char *msg) /* Getaddrinfo-style error */
-{
-    fprintf(stderr, "%s: %s\n", msg, gai_strerror(errcode));
-    exit(SYSCALL_ERR);
-}
+void gai_error(int errcode, const char *msg);
 
 /**
  * @brief Unix-style error.
  *
  * @param msg The message to be shown.
  */
-static inline void unix_error(const char *msg)
-{
-    fprintf(stderr, "%s: %s\n", msg, strerror(errno));
-    exit(SYSCALL_ERR);
-}
+void unix_error(const char *msg);
 
