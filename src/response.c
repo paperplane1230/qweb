@@ -17,6 +17,8 @@ const status_t STATUS_OK = {.msg="OK", .code=HTTP_OK,};
 const status_t STATUS_BAD_REQUEST = {.msg="Bad Request", .code=HTTP_BAD_REQUEST,};
 const status_t STATUS_FORBIDDEN = {.msg="Forbidden", .code=HTTP_FORIBIDDEN,};
 const status_t STATUS_NOT_FOUND = {.msg="Not Found", .code=HTTP_NOT_FOUND,};
+const status_t STATUS_METHOD_NOT_ALLOWED
+                = {.msg="Method Not Allowed", .code=HTTP_METHOD_NOT_ALLOWED,};
 const status_t STATUS_NOT_IMPLEMENTED = {.msg="Not Implemented", .code=HTTP_NOT_IMPLEMENTED,};
 const status_t STATUS_INTERNAL_SERVER_ERROR
                 = {.msg="Internal Server Error", .code=HTTP_INTERNAL_SERVER_ERROR,};

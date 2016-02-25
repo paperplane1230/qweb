@@ -16,6 +16,7 @@ typedef enum {
     HTTP_BAD_REQUEST = 400,
     HTTP_FORIBIDDEN = 403,
     HTTP_NOT_FOUND = 404,
+    HTTP_METHOD_NOT_ALLOWED = 405,
     HTTP_INTERNAL_SERVER_ERROR = 500,
     HTTP_NOT_IMPLEMENTED = 501,
 } status_e;
@@ -40,6 +41,7 @@ extern const status_t STATUS_OK;
 extern const status_t STATUS_BAD_REQUEST;
 extern const status_t STATUS_FORBIDDEN;
 extern const status_t STATUS_NOT_FOUND;
+extern const status_t STATUS_METHOD_NOT_ALLOWED;
 extern const status_t STATUS_INTERNAL_SERVER_ERROR;
 extern const status_t STATUS_NOT_IMPLEMENTED;
 extern const status_t STATUS_VERSION_NOT_SUPPORTED;

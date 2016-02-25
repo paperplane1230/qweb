@@ -48,6 +48,7 @@ static size_t strlncat(char *dst, size_t len, const char *src, size_t n)
     return slen + dlen;
 }
 
+/* #ifdef debug */
 /* static void print_request(void) */
 /* { */
 /*     printf("%u %s HTTP/%u.%u\n", request->method, request->request_url, */
@@ -67,6 +68,7 @@ static size_t strlncat(char *dst, size_t len, const char *src, size_t n)
 /*     printf("fragment: %s\n", request->fragment); */
 /*     fputs("\n", stdout); */
 /* } */
+/* #endif */
 
 static int headers_complete_cb(http_parser *p)
 {
@@ -140,7 +142,7 @@ static int body_cb(http_parser *p, const char *buf, size_t len)
     return 0;
 }
 
-static size_t read_reqeust(rio_t *rp, char *buf)
+static size_t read_request(rio_t *rp, char *buf)
 {
     ssize_t nread = readline(rp, buf, MAXLINE);
     size_t read_sum = nread;
@@ -162,9 +164,12 @@ static int parse_request(int fd)
     rio_init(&rio, fd);
     size_t nread = readline(&rio, buf, MAXLINE);
 
-    nread += read_reqeust(&rio, buf+nread);
+    nread += read_request(&rio, buf+nread);
     if (strncmp(buf, "POST", 4) == 0) {
-        read_reqeust(&rio, buf+nread);
+        nread += read_request(&rio, buf+nread);
+    }
+    if (nread == 0) {
+        return -1;
     }
     http_parser parser;
 
@@ -177,9 +182,6 @@ static int parse_request(int fd)
         .on_body = body_cb,
         .on_chunk_header = chunk_header_cb,
     };
-    if (nread == 0) {
-        return -1;
-    }
     return nread == http_parser_execute(&parser, &settings, buf, nread);
 }
 
@@ -195,7 +197,7 @@ static content_type_e get_type(const char *filename)
     return UNKNOWN;
 }
 
-static void serve_static(int fd, const char *filename, const struct stat *sbuf, bool is_get)
+static void serve_static(int fd, const char *filename, const struct stat *sbuf)
 {
     content_type_e type = get_type(filename);
     time_t t = sbuf->st_mtim.tv_sec;
@@ -210,7 +212,7 @@ static void serve_static(int fd, const char *filename, const struct stat *sbuf, 
             "Accept-Range: bytes\r\n";
 
     snprintf(buf, 256, header_details, time_buf);
-    if (is_get) {
+    if (request->method == HTTP_GET) {
         send_response(fd, &STATUS_OK, buf, type, true, filename, sbuf->st_size);
     } else {
         send_response(fd, &STATUS_OK, buf, type, false, NULL, sbuf->st_size);
@@ -232,7 +234,7 @@ static void do_dup(int oldfd, int newfd)
 static void serve_dynamic(int fd, const char *filename)
 {
     char buf[MAXLINE] = {'\0'};
-    const char *header = 
+    const char *header =
         "HTTP/1.1 200 OK\r\n"
         "Server: qweb\r\n"
         "Date: %s\r\n"
@@ -253,13 +255,10 @@ static void serve_dynamic(int fd, const char *filename)
         send_error(fd, &STATUS_INTERNAL_SERVER_ERROR, "Connection: close\r\n");
         unix_error("fork error");
     } else if (pid == 0) {
-        if (setenv("QUERY_STRING",request->query_string, 1) < 0) {
-            send_error(fd, &STATUS_INTERNAL_SERVER_ERROR, "Connection: close\r\n");
-            unix_error("setenv error");
-        }
         do_dup(fd, STDOUT_FILENO);
-        char *args[] = {NULL,};
+        char *args[1];
 
+        args[0] = request->method == HTTP_POST ? request->body : request->query_string;
         if (execvp(filename, args) < 0) {
             send_error(fd, &STATUS_INTERNAL_SERVER_ERROR, "Connection: close\r\n");
             unix_error("execvp error");
@@ -271,7 +270,7 @@ static void serve_dynamic(int fd, const char *filename)
     }
 }
 
-static void get_or_head(int fd, bool is_get)
+static void do_method(int fd)
 {
     char filename[MAX_ELEMENT_SIZE] = ".";
     struct stat sbuf;
@@ -292,10 +291,19 @@ static void get_or_head(int fd, bool is_get)
         return;
     }
     bool is_static = strstr(url, "/cgi-bin/") == NULL;
+    enum http_method method = request->method;
 
     if (is_static && S_ISREG(sbuf.st_mode) && (S_IRUSR & sbuf.st_mode)) {
-        serve_static(fd, filename, &sbuf, is_get);
+        if (method == HTTP_POST) {
+            send_error(fd, &STATUS_METHOD_NOT_ALLOWED, "Connection: keep-alive\r\n");
+            return;
+        }
+        serve_static(fd, filename, &sbuf);
     } else if (!is_static && S_ISREG(sbuf.st_mode) && (S_IXUSR & sbuf.st_mode)) {
+        if (method == HTTP_HEAD) {
+            send_error(fd, &STATUS_METHOD_NOT_ALLOWED, "Connection: keep-alive\r\n");
+            return;
+        }
         serve_dynamic(fd, filename);
     } else {
         send_error(fd, &STATUS_FORBIDDEN, "Connection: keep-alive\r\n");
@@ -304,22 +312,19 @@ static void get_or_head(int fd, bool is_get)
 
 static void handle_headers(int fd)
 {
+/* #ifdef debug */
+/*     print_request(); */
+/* #endif */
     switch (request->method) {
     case HTTP_HEAD:
-        get_or_head(fd, false);
-        break;
     case HTTP_GET:
-        get_or_head(fd, true);
-        break;
     case HTTP_POST:
+        do_method(fd);
         break;
     default:
         send_error(fd, &STATUS_NOT_IMPLEMENTED, "Connection: keep-alive\r\n");
         break;
     }
-/* #ifdef debug */
-/*     print_request(); */
-/* #endif */
 }
 
 void handle_request(int fd)
@@ -328,6 +333,9 @@ void handle_request(int fd)
     int res = parse_request(fd);
 
     if (res == 0) {
+/* #ifdef debug */
+/*         print_request(); */
+/* #endif */
         send_error(fd, &STATUS_BAD_REQUEST, "Connection: close\r\n");
     } else if (res > 0){
         handle_headers(fd);
