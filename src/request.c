@@ -10,6 +10,7 @@
 #include "response.h"
 #include <assert.h>
 #include <sys/stat.h>
+#include <sys/wait.h>
 #include <time.h>
 
 static request_t *request = NULL;
@@ -194,6 +195,82 @@ static content_type_e get_type(const char *filename)
     return UNKNOWN;
 }
 
+static void serve_static(int fd, const char *filename, const struct stat *sbuf, bool is_get)
+{
+    content_type_e type = get_type(filename);
+    time_t t = sbuf->st_mtim.tv_sec;
+    const size_t TIME_BUF_SIZE = 32;
+    char time_buf[TIME_BUF_SIZE];
+
+    format_time(time_buf, TIME_BUF_SIZE, &t);
+    char buf[256] = {'\0'};
+    const char *header_details =
+            "Last-Modified: %s\r\n"
+            "Connection: keep-alive\r\n"
+            "Accept-Range: bytes\r\n";
+
+    snprintf(buf, 256, header_details, time_buf);
+    if (is_get) {
+        send_response(fd, &STATUS_OK, buf, type, true, filename, sbuf->st_size);
+    } else {
+        send_response(fd, &STATUS_OK, buf, type, false, NULL, sbuf->st_size);
+    }
+}
+
+static void do_dup(int oldfd, int newfd)
+{
+    if (oldfd != newfd) {
+        if (dup2(oldfd, newfd) != newfd) {
+            unix_error("dup2 error");
+        }
+        if (close(oldfd) < 0) {
+            unix_error("close error");
+        }
+    }
+}
+
+static void serve_dynamic(int fd, const char *filename)
+{
+    char buf[MAXLINE] = {'\0'};
+    const char *header = 
+        "HTTP/1.1 200 OK\r\n"
+        "Server: qweb\r\n"
+        "Date: %s\r\n"
+        "Connection: keep-alive\r\n";
+    time_t t;
+    const size_t TIME_BUF_SIZE = 32;
+    char time_buf[TIME_BUF_SIZE];
+
+    time(&t);
+    format_time(time_buf, TIME_BUF_SIZE, &t);
+    snprintf(buf, MAXLINE, header, time_buf);
+    if (writen(fd, buf, strnlen(buf,MAXLINE)) < 0) {
+        return;
+    }
+    pid_t pid;
+
+    if ((pid = fork()) < 0) {
+        send_error(fd, &STATUS_INTERNAL_SERVER_ERROR, "Connection: close\r\n");
+        unix_error("fork error");
+    } else if (pid == 0) {
+        if (setenv("QUERY_STRING",request->query_string, 1) < 0) {
+            send_error(fd, &STATUS_INTERNAL_SERVER_ERROR, "Connection: close\r\n");
+            unix_error("setenv error");
+        }
+        do_dup(fd, STDOUT_FILENO);
+        char *args[] = {NULL,};
+
+        if (execvp(filename, args) < 0) {
+            send_error(fd, &STATUS_INTERNAL_SERVER_ERROR, "Connection: close\r\n");
+            unix_error("execvp error");
+        }
+    }
+    if (wait(NULL) < 0) {
+        send_error(fd, &STATUS_INTERNAL_SERVER_ERROR, "Connection: close\r\n");
+        unix_error("wait error");
+    }
+}
+
 static void get_or_head(int fd, bool is_get)
 {
     char filename[MAX_ELEMENT_SIZE] = ".";
@@ -208,28 +285,20 @@ static void get_or_head(int fd, bool is_get)
     if (stat(filename, &sbuf) < 0) {
         send_error(fd, &STATUS_NOT_FOUND, "Connection: keep-alive\r\n");
         return;
-    } else if (strstr(filename,"/../") ||
-            !S_ISREG(sbuf.st_mode) || !(S_IRUSR & sbuf.st_mode)) {
+    }
+    if (strstr(filename,"/../") != NULL) {
+        // can't access parent directory
         send_error(fd, &STATUS_FORBIDDEN, "Connection: keep-alive\r\n");
         return;
     }
-    content_type_e type = get_type(filename);
-    time_t t = sbuf.st_mtim.tv_sec;
-    const size_t TIME_BUF_SIZE = 32;
-    char time_buf[TIME_BUF_SIZE];
+    bool is_static = strstr(url, "/cgi-bin/") == NULL;
 
-    format_time(time_buf, TIME_BUF_SIZE, &t);
-    char buf[256] = {'\0'};
-    const char *header_details =
-            "Last-Modified: %s\r\n"
-            "Connection: keep-alive\r\n"
-            "Accept-Range: bytes\r\n";
-
-    snprintf(buf, 256, header_details, time_buf);
-    if (is_get) {
-        send_response(fd, &STATUS_OK, buf, type, true, filename, sbuf.st_size);
+    if (is_static && S_ISREG(sbuf.st_mode) && (S_IRUSR & sbuf.st_mode)) {
+        serve_static(fd, filename, &sbuf, is_get);
+    } else if (!is_static && S_ISREG(sbuf.st_mode) && (S_IXUSR & sbuf.st_mode)) {
+        serve_dynamic(fd, filename);
     } else {
-        send_response(fd, &STATUS_OK, buf, type, false, NULL, sbuf.st_size);
+        send_error(fd, &STATUS_FORBIDDEN, "Connection: keep-alive\r\n");
     }
 }
 
@@ -263,6 +332,7 @@ void handle_request(int fd)
     } else if (res > 0){
         handle_headers(fd);
     }
+        // else the client has closed the connection
     free_req();
 }
 

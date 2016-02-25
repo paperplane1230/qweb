@@ -40,13 +40,17 @@ ssize_t writen(int fd, const void *usrbuf, size_t n)
 
     while (nleft > 0) {
         if ((nwritten = write(fd, bufp, nleft)) <= 0) {
-            if (errno == EINTR) {
+            switch (errno) {
+            case EINTR:
                 nwritten = 0;
-            } else if (errno == EPIPE) {
+                break;
+            case EPIPE:
                 return -1;
-            } else {
+                break;
+            default:
                 send_error(fd, &STATUS_INTERNAL_SERVER_ERROR, "Connection: close\r\n");
                 unix_error("writen error");
+                break;
             }
         }
         nleft -= nwritten;
