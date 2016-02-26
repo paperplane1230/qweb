@@ -8,10 +8,12 @@
 #include "request.h"
 #include "rio.h"
 #include "response.h"
+#include "signals.h"
 #include <assert.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
 #include <time.h>
+#include <setjmp.h>
 
 static request_t *request = NULL;
 
@@ -155,6 +157,20 @@ static size_t read_request(rio_t *rp, char *buf)
     return read_sum;
 }
 
+static volatile sig_atomic_t canjump;
+static sigjmp_buf jmpbuf;
+
+static void sigalarm_handler(int signo)
+{
+    assert(signo >= 0);
+    if (canjump == 0) {
+        // unexpected signal, ignore
+        return;
+    }
+    canjump = 0;
+    siglongjmp(jmpbuf, 1);
+}
+
 static int parse_request(int fd)
 {
     const size_t buflen = 5 * MAXLINE;
@@ -162,14 +178,18 @@ static int parse_request(int fd)
     rio_t rio;
 
     rio_init(&rio, fd);
+    canjump = 1;
+    alarm(120);
     size_t nread = readline(&rio, buf, MAXLINE);
 
+    alarm(0);
+    if (nread == 0 || sigsetjmp(jmpbuf, 1)) {
+        // sigsetjmp: no requests from the client within 2 mins, close connection
+        return -1;
+    }
     nread += read_request(&rio, buf+nread);
     if (strncmp(buf, "POST", 4) == 0) {
         nread += read_request(&rio, buf+nread);
-    }
-    if (nread == 0) {
-        return -1;
     }
     http_parser parser;
 
@@ -310,37 +330,61 @@ static void do_method(int fd)
     }
 }
 
-static void handle_headers(int fd)
+static bool handle_headers(int fd)
 {
 /* #ifdef debug */
 /*     print_request(); */
 /* #endif */
+    bool keep_alive = request->should_keep_alive;
+
     switch (request->method) {
     case HTTP_HEAD:
     case HTTP_GET:
     case HTTP_POST:
         do_method(fd);
         break;
-    default:
-        send_error(fd, &STATUS_NOT_IMPLEMENTED, "Connection: keep-alive\r\n");
+    default: {
+        const char *msg = keep_alive
+                ? "Connection: keep-alive\r\n" : "Connection: close\r\n";
+
+        send_error(fd, &STATUS_NOT_IMPLEMENTED, msg);
+        }
         break;
     }
+    return keep_alive;
 }
 
 void handle_request(int fd)
 {
-    init_req();
-    int res = parse_request(fd);
+    const size_t MAX_REQUEST_PER_CONNECTION = 5;
+    bool close = false;
 
-    if (res == 0) {
-/* #ifdef debug */
-/*         print_request(); */
-/* #endif */
-        send_error(fd, &STATUS_BAD_REQUEST, "Connection: close\r\n");
-    } else if (res > 0){
-        handle_headers(fd);
-    }
+    mysignal(SIGALRM, sigalarm_handler);
+    for (size_t i = 0; i < MAX_REQUEST_PER_CONNECTION; ++i) {
+        init_req();
+        int res = parse_request(fd);
+
+        if (res == 0) {
+            /* #ifdef debug */
+            /*         print_request(); */
+            /* #endif */
+            send_error(fd, &STATUS_BAD_REQUEST, "Connection: close\r\n");
+        } else if (res > 0) {
+            if (!handle_headers(fd)) {
+                close = true;
+                break;
+            }
+        } else {
+            close = true;
+            break;
+        }
         // else the client has closed the connection
-    free_req();
+        free_req();
+    }
+    mysignal(SIGALRM, SIG_DFL);
+    if (close) {
+        free_req();
+    }
+    Close(fd);
 }
 
