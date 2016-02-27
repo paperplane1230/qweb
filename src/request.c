@@ -335,6 +335,19 @@ static bool handle_headers(int fd)
 /* #ifdef debug */
 /*     print_request(); */
 /* #endif */
+    size_t headers_num = request->num_headers;
+    bool has_host = false;
+
+    for (size_t i = 0; i < headers_num; ++i) {
+        if (strncmp(request->headers[i][0],"Host",4) == 0) {
+            has_host = true;
+            break;
+        }
+    }
+    if (!has_host) {
+        send_error(fd, &STATUS_BAD_REQUEST, "Connection: close\r\n");
+        return false;
+    }
     bool keep_alive = request->should_keep_alive;
 
     switch (request->method) {
@@ -365,26 +378,22 @@ void handle_request(int fd)
         int res = parse_request(fd);
 
         if (res == 0) {
-            /* #ifdef debug */
-            /*         print_request(); */
-            /* #endif */
             send_error(fd, &STATUS_BAD_REQUEST, "Connection: close\r\n");
+            close = true;
         } else if (res > 0) {
             if (!handle_headers(fd)) {
                 close = true;
-                break;
             }
         } else {
             close = true;
-            break;
         }
         // else the client has closed the connection
         free_req();
+        if (close) {
+            break;
+        }
     }
     mysignal(SIGALRM, SIG_DFL);
-    if (close) {
-        free_req();
-    }
     Close(fd);
 }
 
