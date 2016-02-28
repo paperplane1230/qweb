@@ -14,6 +14,7 @@
 #include <sys/stat.h>
 
 const status_t STATUS_OK = {.msg="OK", .code=HTTP_OK,};
+const status_t STATUS_NOT_MODIFIED = {.msg="Not Modified", .code=HTTP_NOT_MODIFIED,};
 const status_t STATUS_BAD_REQUEST = {.msg="Bad Request", .code=HTTP_BAD_REQUEST,};
 const status_t STATUS_FORBIDDEN = {.msg="Forbidden", .code=HTTP_FORIBIDDEN,};
 const status_t STATUS_NOT_FOUND = {.msg="Not Found", .code=HTTP_NOT_FOUND,};

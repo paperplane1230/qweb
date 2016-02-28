@@ -13,6 +13,7 @@
 
 typedef enum {
     HTTP_OK = 200,
+    HTTP_NOT_MODIFIED = 304,
     HTTP_BAD_REQUEST = 400,
     HTTP_FORIBIDDEN = 403,
     HTTP_NOT_FOUND = 404,
@@ -38,6 +39,7 @@ typedef struct _status_t {
 } status_t;
 
 extern const status_t STATUS_OK;
+extern const status_t STATUS_NOT_MODIFIED;
 extern const status_t STATUS_BAD_REQUEST;
 extern const status_t STATUS_FORBIDDEN;
 extern const status_t STATUS_NOT_FOUND;

@@ -5,6 +5,8 @@
  * @version 0.2
  * @date 2016-02-19
  */
+#define _XOPEN_SOURCE 700
+
 #include "request.h"
 #include "rio.h"
 #include "response.h"
@@ -14,6 +16,7 @@
 #include <sys/wait.h>
 #include <time.h>
 #include <setjmp.h>
+#include <strings.h>
 
 static request_t *request = NULL;
 
@@ -290,7 +293,7 @@ static void serve_dynamic(int fd, const char *filename)
     }
 }
 
-static void do_method(int fd)
+static void do_method(int fd, const char *verify_modified)
 {
     char filename[MAX_ELEMENT_SIZE] = ".";
     struct stat sbuf;
@@ -310,21 +313,39 @@ static void do_method(int fd)
         send_error(fd, &STATUS_FORBIDDEN, "Connection: keep-alive\r\n");
         return;
     }
+    struct tm t;
+
+    memset(&t, 0, sizeof(struct tm));
+    // %Y in strptime and %G in strftime
+    if (verify_modified != NULL
+            && strptime(verify_modified, "%a, %d %h %Y %T %Z", &t) == NULL) {
+        send_error(fd, &STATUS_INTERNAL_SERVER_ERROR, "Connection: keep-alive\r\n");
+        unix_error("strptime error");
+    }
+    // not set by strptime(); tells mktime() to determine if DST is in effect
+    t.tm_isdst = -1;
+    bool modified = mktime(&t) < sbuf.st_mtime;
     bool is_static = strstr(url, "/cgi-bin/") == NULL;
     enum http_method method = request->method;
 
     if (is_static && S_ISREG(sbuf.st_mode) && (S_IRUSR & sbuf.st_mode)) {
         if (method == HTTP_POST) {
             send_error(fd, &STATUS_METHOD_NOT_ALLOWED, "Connection: keep-alive\r\n");
-            return;
+        } else if (modified) {
+            serve_static(fd, filename, &sbuf);
+        } else {
+            send_response(fd, &STATUS_NOT_MODIFIED, "Connection: keep-alive\r\n",
+                    get_type(filename), false, NULL, 0);
         }
-        serve_static(fd, filename, &sbuf);
     } else if (!is_static && S_ISREG(sbuf.st_mode) && (S_IXUSR & sbuf.st_mode)) {
         if (method == HTTP_HEAD) {
             send_error(fd, &STATUS_METHOD_NOT_ALLOWED, "Connection: keep-alive\r\n");
-            return;
+        } else if (modified) {
+            serve_dynamic(fd, filename);
+        } else {
+            send_response(fd, &STATUS_NOT_MODIFIED, "Connection: keep-alive\r\n",
+                    get_type(filename), false, NULL, 0);
         }
-        serve_dynamic(fd, filename);
     } else {
         send_error(fd, &STATUS_FORBIDDEN, "Connection: keep-alive\r\n");
     }
@@ -337,11 +358,16 @@ static bool handle_headers(int fd)
 /* #endif */
     size_t headers_num = request->num_headers;
     bool has_host = false;
+    const char *verify_modified = NULL;
 
     for (size_t i = 0; i < headers_num; ++i) {
-        if (strncmp(request->headers[i][0],"Host",4) == 0) {
+        const char *header = request->headers[i][0];
+
+        if (!has_host && strncmp(header,"Host",4) == 0) {
             has_host = true;
-            break;
+        } else if (verify_modified == NULL
+                && strncmp(header,"If-Modified-Since",17) == 0) {
+            verify_modified = request->headers[i][1];
         }
     }
     if (!has_host) {
@@ -354,7 +380,7 @@ static bool handle_headers(int fd)
     case HTTP_HEAD:
     case HTTP_GET:
     case HTTP_POST:
-        do_method(fd);
+        do_method(fd, verify_modified);
         break;
     default: {
         const char *msg = keep_alive
