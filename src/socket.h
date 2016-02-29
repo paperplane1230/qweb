@@ -1,10 +1,3 @@
-/**
- * @file main.h
- * @brief Header file of main.c of qweb.
- * @author qyl
- * @version 0.1
- * @date 2016-01-30
- */
 #pragma once
 
 #include "error.h"

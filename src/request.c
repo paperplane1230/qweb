@@ -1,10 +1,3 @@
-/**
- * @file request.c
- * @brief Definitions of functions related to requests.
- * @author qyl
- * @version 0.2
- * @date 2016-02-19
- */
 #define _XOPEN_SOURCE 700
 
 #include "request.h"
@@ -293,7 +286,7 @@ static void serve_dynamic(int fd, const char *filename)
     }
 }
 
-static void do_method(int fd, const char *verify_modified)
+static bool do_method(int fd, const char *verify_modified)
 {
     char filename[MAX_ELEMENT_SIZE] = ".";
     struct stat sbuf;
@@ -306,12 +299,12 @@ static void do_method(int fd, const char *verify_modified)
     }
     if (stat(filename, &sbuf) < 0) {
         send_error(fd, &STATUS_NOT_FOUND, "Connection: keep-alive\r\n");
-        return;
+        return true;
     }
     if (strstr(filename,"/../") != NULL) {
         // can't access parent directory
         send_error(fd, &STATUS_FORBIDDEN, "Connection: keep-alive\r\n");
-        return;
+        return true;
     }
     struct tm t;
 
@@ -319,8 +312,8 @@ static void do_method(int fd, const char *verify_modified)
     // %Y in strptime and %G in strftime
     if (verify_modified != NULL
             && strptime(verify_modified, "%a, %d %h %Y %T %Z", &t) == NULL) {
-        send_error(fd, &STATUS_INTERNAL_SERVER_ERROR, "Connection: keep-alive\r\n");
-        unix_error("strptime error");
+        send_error(fd, &STATUS_BAD_REQUEST, "Connection: close\r\n");
+        return false;
     }
     // not set by strptime(); tells mktime() to determine if DST is in effect
     t.tm_isdst = -1;
@@ -349,6 +342,7 @@ static void do_method(int fd, const char *verify_modified)
     } else {
         send_error(fd, &STATUS_FORBIDDEN, "Connection: keep-alive\r\n");
     }
+    return true;
 }
 
 static bool handle_headers(int fd)
@@ -380,7 +374,9 @@ static bool handle_headers(int fd)
     case HTTP_HEAD:
     case HTTP_GET:
     case HTTP_POST:
-        do_method(fd, verify_modified);
+        if (!do_method(fd, verify_modified)) {
+            keep_alive = false;
+        }
         break;
     default: {
         const char *msg = keep_alive

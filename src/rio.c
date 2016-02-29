@@ -1,10 +1,3 @@
-/**
- * @file rio.c
- * @brief Implementation of functions in the header file.
- * @author qyl
- * @version 0.2
- * @date 2016-02-08
- */
 #include "rio.h"
 #include "response.h"
 

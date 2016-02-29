@@ -1,10 +1,3 @@
-/**
- * @file signals.c
- * @brief Definitions related to signals.
- * @author qyl
- * @version 0.3
- * @date 2016-02-26
- */
 #include "signals.h"
 
 handler_t *mysignal(int signum, handler_t *handler)

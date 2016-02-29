@@ -1,10 +1,3 @@
-/**
- * @file response.c
- * @brief Definitions related to responses.
- * @author qyl
- * @version 0.2
- * @date 2016-02-21
- */
 #include "response.h"
 #include "rio.h"
 #include <time.h>

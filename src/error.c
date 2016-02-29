@@ -1,21 +1,28 @@
-/**
- * @file error.c
- * @brief Definitions related to errors.
- * @author qyl
- * @version 0.3
- * @date 2016-02-24
- */
 #include "error.h"
+#include <stdbool.h>
+#include <sys/syslog.h>
+
+bool is_daemon = false;
 
 void gai_error(int errcode, const char *msg)
 {
-    fprintf(stderr, "%s: %s\n", msg, gai_strerror(errcode));
+    const char *err_msg = gai_strerror(errcode);
+
+    if (is_daemon) {
+        syslog(LOG_ERR, "%s: %s", msg, err_msg);
+    } else {
+        fprintf(stderr, "%s: %s\n", msg, err_msg);
+    }
     exit(SYSCALL_ERR);
 }
 
 void unix_error(const char *msg)
 {
-    fprintf(stderr, "%s: %s\n", msg, strerror(errno));
+    if (is_daemon) {
+        syslog(LOG_ERR, "%s: %m", msg);
+    } else {
+        fprintf(stderr, "%s: %s\n", msg, strerror(errno));
+    }
     exit(SYSCALL_ERR);
 }
 

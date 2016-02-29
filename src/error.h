@@ -1,10 +1,3 @@
-/**
- * @file error.h
- * @brief Declaration of functions used to deal with errors.
- * @author qyl
- * @version 0.1
- * @date 2016-02-05
- */
 #pragma once
 
 #include <errno.h>

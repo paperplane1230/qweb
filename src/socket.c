@@ -1,10 +1,3 @@
-/**
- * @file socket.c
- * @brief The definition of functions in socket.h.
- * @author qyl
- * @version 0.1
- * @date 2016-02-05
- */
 #include "socket.h"
 #include <netdb.h>
 #include <string.h>

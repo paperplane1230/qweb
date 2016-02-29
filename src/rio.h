@@ -1,10 +1,3 @@
-/**
- * @file rio.h
- * @brief Declarations of robust I/O.
- * @author qyl
- * @version 0.2
- * @date 2016-02-07
- */
 #pragma once
 
 #include "socket.h"

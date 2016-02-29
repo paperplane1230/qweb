@@ -1,10 +1,3 @@
-/**
- * @file request.h
- * @brief Declarations related to requests of http.
- * @author qyl
- * @version 0.2
- * @date 2016-02-18
- */
 #pragma once
 
 #include "http_parser.h"

@@ -1,14 +1,7 @@
-/**
- * @file main.c
- * @brief The 'main' part of qweb.
- * @author qyl
- * @version 0.1
- * @date 2016-01-30
- */
 #include "request.h"
 #include "signals.h"
 #include <stdio.h>
-#include <stdbool.h>
+#include <sys/syslog.h>
 
 static void usage(const char *name)
 {
@@ -16,11 +9,17 @@ static void usage(const char *name)
     exit(ARGS_NUM_ERR);
 }
 
+extern bool is_daemon;
+
 int main(int argc, char *argv[])
 {
     if (argc != 2) {
         usage(argv[0]);
     }
+    if (daemon(1,0) < 0) {
+        unix_error("daemon error");
+    }
+    is_daemon = true;
     int listenfd = tcp_listen(NULL, argv[1]);
     struct sockaddr_storage clientaddr;
     char host[MAXLINE] = {'\0'};
@@ -33,7 +32,7 @@ int main(int argc, char *argv[])
 
         Getnameinfo((SA *) &clientaddr, clientlen, host, MAXLINE,
                 port, MAXLINE, NI_NUMERICSERV | NI_NUMERICHOST);
-        printf("Accepted connection from (%s, %s)\n", host, port);
+        syslog(LOG_INFO, "Connection from (%s, %s)", host, port);
         handle_request(connfd);
     }
     return EXIT_SUCCESS;

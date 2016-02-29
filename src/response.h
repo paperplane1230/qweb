@@ -1,10 +1,3 @@
-/**
- * @file response.h
- * @brief Declarations related to responses.
- * @author qyl
- * @version 0.2
- * @date 2016-02-20
- */
 #pragma once
 
 #include "socket.h"
