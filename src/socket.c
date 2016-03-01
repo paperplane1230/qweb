@@ -2,16 +2,6 @@
 #include <netdb.h>
 #include <string.h>
 
-int Accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen)
-{
-    int res = 0;
-
-    if ((res = accept(sockfd, addr, addrlen)) < 0) {
-        unix_error("Accept error");
-    }
-    return res;
-}
-
 void Getnameinfo(const struct sockaddr *sa, socklen_t salen,
         char *host, socklen_t hostlen, char *serv, socklen_t servlen, int flags)
 {

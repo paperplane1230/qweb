@@ -30,17 +30,6 @@ int tcp_listen(const char *host, const char *serv);
 void Close(int fd);
 
 /**
- * @brief Wrapper function for accept.
- *
- * @param sockfd The first parameter of accept.
- * @param addr The second parameter of accept.
- * @param addrlen The third parameter of accept.
- *
- * @return Returned value of accept if succeed else exit with error.
- */
-int Accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen);
-
-/**
  * @brief Wrapper function for getnameinfo.
  *
  * @param sa The first parameter of getnameinfo.

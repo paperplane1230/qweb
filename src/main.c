@@ -28,8 +28,15 @@ int main(int argc, char *argv[])
     mysignal(SIGPIPE, SIG_IGN);
     while (true) {
         socklen_t clientlen = sizeof(clientaddr);
-        int connfd = Accept(listenfd, (SA *) &clientaddr, &clientlen);
+        int connfd = accept(listenfd, (SA *) &clientaddr, &clientlen);
 
+        if (connfd < 0) {
+            if (errno == EINTR) {
+                continue;
+            } else {
+                unix_error("accept error");
+            }
+        }
         Getnameinfo((SA *) &clientaddr, clientlen, host, MAXLINE,
                 port, MAXLINE, NI_NUMERICSERV | NI_NUMERICHOST);
         syslog(LOG_INFO, "Connection from (%s, %s)", host, port);
