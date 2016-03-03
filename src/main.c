@@ -16,10 +16,12 @@ int main(int argc, char *argv[])
     if (argc != 2) {
         usage(argv[0]);
     }
+#ifndef debug
     if (daemon(1,0) < 0) {
         unix_error("daemon error");
     }
     is_daemon = true;
+#endif
     int listenfd = tcp_listen(NULL, argv[1]);
     struct sockaddr_storage clientaddr;
     char host[MAXLINE] = {'\0'};
@@ -39,7 +41,11 @@ int main(int argc, char *argv[])
         }
         Getnameinfo((SA *) &clientaddr, clientlen, host, MAXLINE,
                 port, MAXLINE, NI_NUMERICSERV | NI_NUMERICHOST);
+#ifndef debug
         syslog(LOG_INFO, "Connection from (%s, %s)", host, port);
+#else
+        printf("Connection from (%s, %s)\n", host, port);
+#endif
         handle_request(connfd);
     }
     return EXIT_SUCCESS;
