@@ -16,7 +16,8 @@ typedef enum {
 } status_e;
 
 typedef enum {
-    TEXT_HTML, TEXT_PLAIN, UNKNOWN,
+    TEXT_HTML, APPLICATION_MSWORD, APPLICATION_POWERPOINT,
+    IMGAGE_GIF, IMAGE_JPEG, TEXT_PLAIN, UNKNOWN,
 } content_type_e;
 
 /** @struct _status_t

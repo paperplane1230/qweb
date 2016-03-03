@@ -18,7 +18,8 @@ const status_t STATUS_INTERNAL_SERVER_ERROR
                 = {.msg="Internal Server Error", .code=HTTP_INTERNAL_SERVER_ERROR,};
 
 static const char *content_type[] = {
-    "text/html", "text/plain", "unknown",
+    "text/html", "application/msword", "application/powerpoint",
+    "image/gif", "image/jpeg", "text/plain", "unknown",
 };
 
 const char response_header[MAXLINE] =

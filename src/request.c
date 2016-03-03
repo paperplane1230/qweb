@@ -16,8 +16,8 @@ static request_t *request = NULL;
 #define TYPE_NUM 20
 
 static const char *postfix[TYPE_NUM][3] = {
-    {".html", ".htm",},
-    {".txt"},
+    {".html", ".htm",}, {".doc",}, {".ppt",}, {".gif",},
+    {".jpeg", ".jpg", ".jpe",}, {".txt",},
 };
 
 static void init_req(void)
